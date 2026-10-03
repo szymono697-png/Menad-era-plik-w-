@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Start - Menedżer plików</title>
+<style>
+:root {
+    --bg: #180052; /* Klasyczny fiolet/granat Windows 8 */
+    --fg: #fff;
+    --mut: #cfe3ea;
+    --bar: #222;
+    --inp: #fff;
+    
+    /* Kolory kafelków Metro */
+    --blue: #2d89ef; --green: #00a300; --orange: #da532c; 
+    --purple: #b91d47; --teal: #00aba9; --navy: #2b5797; 
+    --violet: #7e3878; --gray: #5a5a5a;
+    
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+        --bg: #0b333c; 
+    }
+}
+* { box-sizing: border-box; border-radius: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+[hidden] { display: none !important; }
+
+html, body {
+    height: 100%; margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Segoe UI", "Segoe UI Web", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+}
+body { display: flex; flex-direction: column; }
+
+#login {
+    position: fixed; inset: 0; background: var(--bg); z-index: 2000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: transform 0.6s cubic-bezier(0.8, 0, 0.2, 1), opacity 0.6s;
+    background-image: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.2) 100%);
+}
+#login.hide {
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+}
+#login .avatar { width: 140px; height: 140px; fill: none; stroke: #fff; stroke-width: 1.5; margin-bottom: 24px; stroke-linecap: round; }
+#login .name { font-size: 42px; font-weight: 200; margin-bottom: 30px; letter-spacing: -1px; }
+#login-form { display: flex; align-items: center; gap: 8px; }
+#login input { 
+    width: 260px; background: #fff; color: #000; border: none; padding: 12px 16px; 
+    font-size: 16px; outline: 2px solid transparent; user-select: text;
+}
+#login input:focus { outline-color: var(--blue); }
+#login button { 
+    background: transparent; color: #fff; border: 2px solid #fff; 
+    width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; 
+    cursor: pointer; transition: background 0.1s, color 0.1s;
+}
+#login button:hover { background: #fff; color: #000; }
+#login button svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+header { padding: 30px 40px 10px; display: flex; flex-direction: column; }
+.hr { display: flex; justify-content: space-between; align-items: flex-start; }
+#ttl { font-size: 48px; font-weight: 200; letter-spacing: -1.5px; line-height: 1; margin-right: 40px; }
+#usr-panel { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 300; }
+#usr-panel svg { width: 42px; height: 42px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+#path { font-size: 14px; color: var(--mut); margin-top: 10px; text-align: left; }
+#q { margin-top: 15px; max-width: 400px; color: #000; padding: 10px; font-size: 14px; border: 0; outline: 2px solid transparent; }
+#q:focus { outline-color: var(--blue); }
+
+main {
+    flex: 1; overflow-x: auto; overflow-y: hidden; 
+    padding: 20px 40px 40px; touch-action: pan-x;
+}
+/* Grid ułożony w kolumnach, paski przewijania poziome */
+#grid {
+    display: grid;
+    grid-auto-flow: column dense;
+    grid-auto-columns: 120px;
+    gap: 12px;
+    height: 100%;
+    align-content: start;
+    padding-right: 120px; /* Miejsce na Pasek Zaklęć */
+}
+
+/* W Windows 8 liczba wierszy zależała od rozdzielczości ekranu */
+@media (min-height: 100px) { #grid { grid-template-rows: repeat(2, 120px); } }
+@media (min-height: 450px) { #grid { grid-template-rows: repeat(3, 120px); } }
+@media (min-height: 600px) { #grid { grid-template-rows: repeat(4, 120px); } }
+@media (min-height: 750px) { #grid { grid-template-rows: repeat(5, 120px); } }
+@media (min-height: 900px) { #grid { grid-template-rows: repeat(6, 120px); } }
+
+.fly {
+    animation: tileFly 0.6s cubic-bezier(0.1, 0.9, 0.2, 1) backwards;
+}
+@keyframes tileFly {
+    0% { transform: perspective(800px) rotateY(15deg) translate3d(250px, 50px, -150px) scale(0.9); opacity: 0; }
+    100% { transform: perspective(800px) rotateY(0) translate3d(0, 0, 0) scale(1); opacity: 1; }
+}
+
+.t {
+    background: var(--gray); position: relative; display: flex; flex-direction: column;
+    justify-content: flex-end; padding: 12px; color: #fff; touch-action: manipulation;
+    cursor: pointer; transition: transform 0.1s ease-out; overflow: hidden;
+    background-position: center; background-size: cover;
+    height: 100%; width: 100%;
+}
+.t:active { transform: scale(0.95); }
+.t .icon-container { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: 48px; height: 48px; }
+.t .icon-container svg { width: 100%; height: 100%; stroke: #fff; fill: none; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.t span { font-size: 14px; font-weight: 400; line-height: 1.2; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; position: relative; z-index: 2; }
+.t.th .icon-container { display: none; }
+.t.dir, .t.bl { background: var(--blue); }
+.t.img, .t.gr { background: var(--green); }
+.t.aud { background: var(--purple); }
+.t.vid { background: var(--orange); }
+.t.txt, .t.tl { background: var(--teal); }
+.t.doc { background: var(--navy); }
+.t.zip, .t.vi { background: var(--violet); }
+.w { grid-column: span 2; }
+.big { grid-column: span 2; grid-row: span 2; }
+.big .icon-container { width: 84px; height: 84px; top: 45%; }
+.n { position: absolute; bottom: 12px; right: 12px; font-size: 14px; font-weight: 700; z-index: 2; }
+.clk { background: #111; justify-content: flex-end; }
+.clk b { font-size: 40px; font-weight: 200; margin-bottom: 5px; }
+.clk span { font-size: 14px; color: #aaa; }
+
+/* Obrazy (Live Tile) */
+.fl { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 0.9s cubic-bezier(0.4, 0, 0.2, 1); }
+.fl.f { transform: rotateX(180deg); }
+.fa, .fb { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; background-size: cover; background-position: center; }
+.fb { transform: rotateX(180deg); }
+.big.live::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 50px; background: linear-gradient(transparent, rgba(0,0,0,0.7)); z-index: 1; }
+
+/* Zaznaczenie kafelka SVG (Zamiast ✓) */
+.t.s { outline: 3px solid #fff; outline-offset: -3px; }
+.t.s::after {
+    content: ""; position: absolute; top: 0; right: 0; width: 28px; height: 28px;
+    background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="square"><path d="M5 12l4 4L19 7"/></svg>') center/18px no-repeat;
+    z-index: 3;
+}
+.e { grid-column: 1 / -1; color: var(--mut); padding: 24px 4px; font-size: 18px; font-weight: 300; }
+
+#charms-zone { position: fixed; right: 0; top: 0; bottom: 0; width: 15px; z-index: 990; }
+#charms {
+    position: fixed; right: -90px; top: 0; bottom: 0; width: 85px;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
+    display: flex; flex-direction: column; justify-content: center;
+    transition: right 0.3s cubic-bezier(0.1, 0.9, 0.2, 1); z-index: 1000;
+}
+#charms-zone:hover ~ #charms, #charms:hover { right: 0; }
+#charms button {
+    background: transparent; border: 0; color: #fff;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 5px; cursor: pointer; transition: background 0.2s;
+}
+#charms button svg { width: 32px; height: 32px; stroke: #fff; fill: none; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+#charms button span { font-size: 11px; margin-top: 6px; font-weight: 300; }
+#charms button:hover { background: rgba(255,255,255,0.1); }
+
+nav { display: flex; background: var(--bar); overflow-x: auto; padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; transform: translateY(100%); transition: transform .3s cubic-bezier(.1,.9,.2,1); }
+#nav-zone { position: fixed; left: 0; right: 0; bottom: 0; height: 20px; z-index: 9; }
+#nav-zone:hover ~ nav, nav:hover, nav.on { transform: none; }
+nav button, .vb button, #dlg button {
+    font: inherit; color: var(--fg); background: none; border: 0; padding: 8px 12px;
+    min-width: 80px; display: flex; flex-direction: column; align-items: center; gap: 5px;
+    font-size: 12px; touch-action: manipulation; cursor: pointer;
+}
+nav button .ico {
+    width: 40px; height: 40px; border: 2px solid #fff; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; transition: background 0.1s;
+}
+nav button svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+nav button:active .ico, .vb button:active { background: #fff; color: #000; }
+nav button:disabled { opacity: 0.35; pointer-events: none; }
+nav button.on .ico { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+#v { position: fixed; inset: 0; background: var(--bg); z-index: 10; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.vb { display: flex; background: var(--bar); align-items: center; padding: 5px; }
+.vb button { flex-direction: row; font-size: 14px; padding: 14px 16px; flex: 0 0 auto; gap: 8px; }
+.vb button svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; }
+.vb .vn { flex: 1; padding: 0 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 18px; font-weight: 300; }
+#vb { flex: 1; overflow: auto; display: flex; flex-direction: column; align-items: center; background: #000; color: #fff; }
+#vb img, #vb video { max-width: 100%; max-height: 100%; margin: auto; object-fit: contain; }
+#vb audio { width: 92%; margin: auto; outline: none; }
+#vb textarea { flex: 1; width: 100%; border: 0; resize: none; font: 15px/1.5 Consolas, "Courier New", monospace; background: #111; color: #fff; white-space: pre; overflow: auto; padding: 20px; }
+#vb .m { width: 100%; padding: 20px; font-size: 14px; background: var(--bar); color: #fff; line-height: 1.8; font-weight: 300; }
+#vb .m small { color: var(--mut); display: inline-block; width: 120px; text-transform: uppercase; font-size: 11px; font-weight: bold; }
+
+#dlg { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 20; display: flex; align-items: center; justify-content: center; padding: 20px; }
+#dlg > div { background: var(--bg); width: 100%; max-width: 480px; padding: 24px; border: 2px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+#dt { font-size: 24px; font-weight: 200; margin-bottom: 20px; }
+#dlg input { padding: 12px; font-size: 16px; color: #000; background: #fff; border: none; }
+#dlg .r { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+#dlg button { background: var(--gray); flex-direction: row; justify-content: center; padding: 10px 24px; font-size: 15px; border: 2px solid transparent; }
+#dlg button:hover { border-color: #fff; }
+#dok { background: var(--blue) !important; }
+
+#toast { position: fixed; top: 40px; right: 40px; background: var(--blue); color: #fff; padding: 16px 24px; font-size: 15px; font-weight: 300; z-index: 3000; opacity: 0; transform: translateX(20px); pointer-events: none; transition: opacity 0.3s, transform 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+#toast.on { opacity: 1; transform: translateX(0); }
+
+#login .fields{display:flex;flex-direction:column;gap:8px}
+#login-form{align-items:flex-end}
+#login .sub{color:var(--mut);font-size:15px;font-weight:300;margin:-18px 0 24px;text-align:center;max-width:340px}
+#login-err{min-height:20px;margin-top:12px;color:#ff9a9a;font-size:14px}
+#login a{color:var(--mut);font-size:13px;margin-top:14px;cursor:pointer;text-decoration:underline}
+#login-form.shake{animation:sh .3s}
+@keyframes sh{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+#usr-panel{cursor:pointer}
+.t.pm{background:#e3a21a}
+#pl{position:fixed;inset:0;z-index:12;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+#pl .st{flex:1;min-height:0;position:relative;background:#000;overflow:hidden}
+#pl video{width:100%;height:100%;object-fit:contain;display:block}
+#pl .art{position:absolute;inset:0;background:var(--purple);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:20px;text-align:center;font-size:22px;font-weight:200;pointer-events:none;word-break:break-word}
+#pl .st.au .art{display:flex}
+#pl .art svg{width:120px;height:120px;stroke:#fff;fill:none;stroke-width:1;stroke-linecap:round;stroke-linejoin:round}
+#plist{position:absolute;top:0;bottom:0;right:0;width:min(360px,100%);background:rgba(0,0,0,.92);overflow:auto;transform:translateX(100%);transition:transform .3s;z-index:2}
+#plist.on{transform:none}
+.pi{display:flex;gap:10px;align-items:center;padding:12px 16px;font-size:14px;cursor:pointer;border-bottom:1px solid #222}
+.pi svg{width:20px;height:20px;flex:none;stroke:#fff;fill:none;stroke-width:1.5}
+.pi span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pi.on{background:var(--blue)}
+#pc{background:var(--bar);padding:6px 16px 12px}
+.sk{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mut)}
+.sk input{flex:1}
+#pl input[type=range]{-webkit-appearance:none;appearance:none;height:4px;background:#555;outline:none;margin:14px 0;border-radius:0}
+#pl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:22px;background:#fff;border:0;border-radius:0}
+#pl input[type=range]::-moz-range-thumb{width:12px;height:22px;background:#fff;border:0;border-radius:0}
+.cb{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px}
+.cb button{position:relative;background:none;border:0;color:#fff;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font:12px "Segoe UI",sans-serif;touch-action:manipulation}
+.cb button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cb button.on{background:var(--blue)}
+#pPp{border:2px solid #fff;width:56px;height:56px}
+#pRp[data-m="2"]::after{content:"1";position:absolute;font-size:9px;font-weight:700}
+.cb .vol{display:flex;align-items:center;gap:4px}.cb .vol input{width:90px}
+@media(max-width:600px){.cb .vol input{display:none}}
+#login-users{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin:-8px 0 18px}
+#login #login-users a{margin:0}
+#set{position:fixed;inset:0;z-index:12;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+#sb{flex:1;overflow:auto;padding:10px 40px 40px;max-width:560px;user-select:text}
+#sb h3{font-size:26px;font-weight:200;margin:26px 0 10px}
+.ar{display:flex;align-items:center;gap:12px;padding:8px 0;font-size:16px}.ar b{flex:1;font-weight:300}
+.sbtn{background:var(--gray);color:#fff;border:2px solid transparent;padding:10px 20px;font:inherit;font-size:14px;cursor:pointer}.sbtn:hover{border-color:#fff}
+#sb input{display:block;width:100%;max-width:320px;margin-bottom:8px;padding:12px;font-size:16px;border:0;color:#000}
+#sst{font-size:14px;color:var(--mut);margin-bottom:12px;line-height:1.5}
+.t.code{background:#603cba}.t.pdf{background:#c91f1f}.t.xls{background:#1e7145}.t.ppt{background:#d24726}
+.t.out { transform-origin: left center; animation: tsOut .35s cubic-bezier(.5,0,.8,.4) forwards; }
+@keyframes tsOut { to { transform: perspective(800px) rotateY(80deg) translateZ(-80px); opacity: 0; } }
+.tsin, #pl:not([hidden]), #v:not([hidden]), #set:not([hidden]) { transform-origin: left center; animation: tsIn .4s cubic-bezier(.1,.9,.2,1) backwards; }
+@keyframes tsIn { from { transform: perspective(900px) rotateY(-70deg); opacity: 0; } to { transform: perspective(900px) rotateY(0); opacity: 1; } }
+</style>
+</head>
+<body>
+
+<div id="login">
+    <svg class="avatar" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg>
+    <div class="name" id="login-title">Zaloguj się</div>
+    <div class="sub" id="login-sub"></div>
+    <div id="login-users"></div>
+    <form id="login-form">
+        <div class="fields">
+            <input type="text" id="login-user" placeholder="Nazwa użytkownika" autocomplete="username" maxlength="24" hidden>
+            <input type="password" id="login-pass" placeholder="Hasło" autocomplete="current-password">
+            <input type="password" id="login-pass2" placeholder="Powtórz hasło" autocomplete="new-password" hidden>
+        </div>
+        <button type="submit" id="btn-login" aria-label="Dalej">
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+    </form>
+    <div id="login-err"></div>
+    <a href="#" id="login-reset">Nie pamiętasz hasła? Usuń to konto</a>
+</div>
+
+<div id="charms-zone"></div>
+<div id="charms">
+    <button id="c-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg><span>Szukaj</span></button>
+    <button id="c-share"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg><span>Udostępnij</span></button>
+    <button id="c-start"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg><span>Start</span></button>
+    <button id="c-devices"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="12" rx="2" ry="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg><span>Urządzenia</span></button>
+    <button id="c-settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Ustawienia</span></button>
+</div>
+
+<header>
+    <div class="hr">
+        <div id="ttl">Start</div>
+        <div id="usr-panel">
+            <span id="usr">Gość</span>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg>
+        </div>
+    </div>
+    <div id="path"></div>
+    <input id="q" type="search" placeholder="Zacznij wpisywać, aby wyszukać" hidden>
+</header>
+<main><div id="grid"></div></main>
+
+<div id="nav-zone"></div>
+<nav>
+    <button id="bBack"><div class="ico"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></div>Wstecz</button>
+    <button id="bAdd"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>Dodaj pliki</button>
+    <button id="bOpen"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg></div>Dysk lokalny</button>
+    <button id="bDir"><div class="ico"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/><path d="M12 10v6M9 13h6"/></svg></div>Nowy folder</button>
+    <button id="bFile"><div class="ico"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg></div>Nowy plik</button>
+    <button id="bFind"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg></div>Szukaj</button>
+    <button id="bSel"><div class="ico"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>Zaznacz</button>
+    <button id="bRen" hidden><div class="ico"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>Zmień nazwę</button>
+    <button id="bCvt" hidden><div class="ico"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></div>Zmień format</button>
+    <button id="bDel" hidden><div class="ico"><svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg></div>Usuń</button>
+</nav>
+
+<div id="v" hidden>
+    <div class="vb">
+        <button id="vx"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Wróć</button>
+        <div class="vn" id="vt"></div>
+        <button id="vs" hidden><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Zapisz</button>
+        <button id="vr"><svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Usuń</button>
+        <button id="vd"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Pobierz</button>
+        <button id="vh"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Udostępnij</button>
+    </div>
+    <div id="vb"></div>
+</div>
+
+<div id="pl" hidden>
+    <div class="vb">
+        <button id="px"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Wróć</button>
+        <div class="vn" id="pt"></div>
+        <button id="pdl"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Pobierz</button>
+    </div>
+    <div class="st au" id="st">
+        <video id="mv" playsinline></video>
+        <div class="art"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><div id="pn"></div></div>
+        <div id="plist"></div>
+    </div>
+    <div id="pc">
+        <div class="sk"><span id="tc">0:00</span><input type="range" id="sk" min="0" max="1000" value="0"><span id="td">0:00</span></div>
+        <div class="cb">
+            <button id="pSh" aria-label="Losowo"></button><button id="pPr" aria-label="Poprzedni"></button><button id="pPp" aria-label="Odtwarzaj"></button><button id="pNx" aria-label="Następny"></button><button id="pRp" aria-label="Powtarzaj" data-m="0"></button>
+            <div class="vol"><button id="pMu" aria-label="Wycisz"></button><input type="range" id="pv" min="0" max="1" step="0.01" value="1"></div>
+            <button id="pSp" aria-label="Prędkość">1×</button><button id="pFs" aria-label="Pełny ekran"></button><button id="pLs" aria-label="Lista"></button>
+        </div>
+    </div>
+</div>
+
+<div id="set" hidden>
+    <div class="vb"><button id="sx"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Wróć</button><div class="vn">Ustawienia</div></div>
+    <div id="sb">
+        <h3>Konta</h3><div id="sl"></div>
+        <h3>Dodaj konto</h3>
+        <input id="s-user" placeholder="Nazwa użytkownika" maxlength="24" autocomplete="off">
+        <input id="s-pass" type="password" placeholder="Hasło (min. 4 znaki)" autocomplete="new-password">
+        <input id="s-pass2" type="password" placeholder="Powtórz hasło" autocomplete="new-password">
+        <button class="sbtn" id="sadd">Dodaj konto</button>
+        <h3>Pamięć</h3><div id="sst"></div>
+        <select id="scm" class="sbtn" style="margin-bottom:12px;display:block"><option value="off">Bez kompresji</option><option value="gz">Kompresja bezstratna (gzip)</option><option value="low">Obrazy w niskiej rozdzielczości + gzip</option></select>
+        <div id="scn" style="font-size:13px;color:var(--mut);margin-bottom:12px">Pliki są kompresowane przy zapisie i automatycznie rozpakowywane przy wczytaniu. Tryb niskiej rozdzielczości zmniejsza obrazy do 1024 px (JPEG) — tego nie da się cofnąć.</div>
+        <button class="sbtn" id="sclr">Wyczyść „Pobrane”</button>
+    </div>
+</div>
+
+<div id="dlg" hidden>
+    <div>
+        <div id="dt"></div>
+        <input id="di" autocomplete="off">
+        <div class="r"><button id="dno">Anuluj</button><button id="dok">OK</button></div>
+    </div>
+</div>
+<div id="toast"></div>
+
+<input type="file" id="fin" webkitdirectory multiple hidden>
+<input type="file" id="fadd" multiple hidden>
+
+<script>
+const $ = s => document.querySelector(s), FSA = !!window.showDirectoryPicker;
+
+const EXT = {
+    img: 'jpg jpeg png webp gif bmp svg avif', aud: 'mp3 wav ogg m4a flac aac', vid: 'mp4 webm mov mkv m4v',
+    txt: 'txt log md', code: 'json html htm js ts css xml py ini yml yaml sh java c cpp',
+    pdf: 'pdf', doc: 'doc docx odt rtf', xls: 'xls xlsx csv ods', ppt: 'ppt pptx odp', zip: 'zip rar 7z tar gz apk'
+};
+const CAT = {
+    img: ['Obrazy', 'img'], aud: ['Muzyka', 'aud'], vid: ['Wideo', 'vid'], txt: ['Tekst', 'txt'], code: ['Kod', 'code'],
+    pdf: ['PDF', 'pdf'], doc: ['Dokumenty', 'doc'], xls: ['Arkusze', 'xls'], ppt: ['Prezentacje', 'ppt'], zip: ['Archiwa', 'zip'], oth: ['Inne', 'oth']
+};
+
+/* Zbiór wszystkich czystych ikon SVG (zakaz emotikon) */
+const P = {
+    img: '<rect x="3" y="4" width="18" height="16" rx="1"/><circle cx="9" cy="10" r="2"/><path d="M3 18l6-5 4 3 3-2 5 4"/>',
+    aud: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+    vid: '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M10 9l5 3-5 3z"/>',
+    txt: '<path d="M4 4v16h16V8l-4-4H4z"/><path d="M14 4v4h4M8 12h8M8 16h8"/>',
+    doc: '<path d="M4 4v16h16V8l-4-4H4z"/><path d="M14 4v4h4M8 12h5M8 16h8"/>',
+    zip: '<path d="M4 4v16h16V4H4z"/><path d="M12 4v16M8 6h8M8 10h8M8 14h8M8 18h8"/>',
+    oth: '<path d="M4 4v16h16V8l-4-4H4z"/><path d="M14 4v4h4"/>',
+    folder: '<path d="M3 6h7l2 2h9v11H3z"/>',
+    code: '<path d="M8 6l-6 6 6 6M16 6l6 6-6 6M14 4l-4 16"/>',
+    pdf: '<path d="M4 4v16h16V8l-4-4H4z"/><path d="M14 4v4h4M8 16c2-5 3-5 3-2s2 2 5 1"/>',
+    xls: '<path d="M4 4v16h16V8l-4-4H4z"/><path d="M14 4v4h4M8 12h8M8 16h8M12 11v7"/>',
+    ppt: '<rect x="3" y="4" width="18" height="12"/><path d="M12 16v4M8 20h8M8 12l2-3 3 2 3-4"/>',
+    plus: '<path d="M12 4v16M4 12h16"/>',
+    play: '<circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/>'
+};
+
+const ic = k => '<svg viewBox="0 0 24 24">' + (P[k] || P.oth) + '</svg>';
+const ext = n => n.includes('.') ? n.split('.').pop().toLowerCase() : '';
+const kind = n => { const e = ext(n); for (const k in EXT) if (EXT[k].split(' ').includes(e)) return k; return 'oth' };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const lib = { name: 'Pobrane', kind: 'directory', children: new Map() };
+let FMT = {}, tsNext = false, root = null, mode = 'start', cat = 'img', stack = [], items = [], idx = {}, sel = new Set(), selMode = false, viewing = null, vurl = null, li = 0, lf = false;
+let loggedIn = false;
+const topStack = () => stack[stack.length - 1];
+
+function toast(m) {
+    const t = $('#toast'); t.textContent = m; t.classList.add('on');
+    clearTimeout(t._); t._ = setTimeout(() => t.classList.remove('on'), 2800);
+}
+const safe = f => async (...a) => {
+    try { await f(...a) } catch (e) { if (e && e.name !== 'AbortError') toast('Błąd: ' + (e.message || e)) }
+};
+const fmt = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : b < 1073741824 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1073741824).toFixed(2) + ' GB';
+
+function ask(t, v) {
+    return new Promise(r => {
+        const d = $('#dlg'), i = $('#di'); $('#dt').textContent = t; i.hidden = v === null; i.value = v || '';
+        d.hidden = false; if (v !== null) setTimeout(() => { i.focus(); i.select() }, 50);
+        const end = x => { d.hidden = true; $('#dok').onclick = $('#dno').onclick = i.onkeydown = null; r(x) };
+        $('#dok').onclick = () => end(v === null ? true : (i.value.trim() || null));
+        $('#dno').onclick = () => end(null);
+        i.onkeydown = e => { if (e.key === 'Enter') $('#dok').click() }
+    });
+}
+
+function buildTree(files) {
+    const r = { name: files[0].webkitRelativePath.split('/')[0] || 'Folder', kind: 'directory', children: new Map() };
+    for (const f of files) {
+        const p = (f.webkitRelativePath || f.name).split('/').slice(1); let d = r;
+        p.forEach((s, i) => {
+            if (i === p.length - 1) d.children.set(s, { name: s, kind: 'file', file: f });
+            else { let n = d.children.get(s); if (!n) { n = { name: s, kind: 'directory', children: new Map() }; d.children.set(s, n) } d = n }
+        })
+    } return r;
+}
+
+async function list(d) {
+    let a = [];
+    if (d.handle) { for await (const h of d.handle.values()) a.push({ name: h.name, kind: h.kind, handle: h }) }
+    else a = [...d.children.values()];
+    return a.sort((x, y) => (x.kind === 'file') - (y.kind === 'file') || x.name.localeCompare(y.name, 'pl', { numeric: true }));
+}
+const getFile = it => it.handle ? it.handle.getFile() : Promise.resolve(it.file);
+
+async function scan0() {
+    idx = {}; FMT = {}; for (const k in CAT) idx[k] = []; let n = 0;
+    const walk = async (d, dep) => {
+        for (const it of await list(d)) {
+            if (n > 4000) return;
+            if (it.kind === 'directory') {
+                if (dep < 8) await walk(it.handle ? { name: it.name, kind: 'directory', handle: it.handle } : it, dep + 1)
+            } else { it.parent = d; const kk = kind(it.name), ee = ext(it.name) || 'bez', xk = 'x:' + ee; idx[kk].push(it); (idx[xk] = idx[xk] || []).push(it); FMT[xk] = [ee === 'bez' ? 'Bez rozszerzenia' : ee.toUpperCase(), kk]; n++ }
+        }
+    };
+    if (root) await walk(root, 0); await walk(lib, 0);
+    for (const k in idx) idx[k].sort((a, b) => a.name.localeCompare(b.name, 'pl', { numeric: true }));
+}
+
+const thumb = async f => {
+    const b = await createImageBitmap(f, { resizeWidth: 320, resizeQuality: 'low' }), c = document.createElement('canvas');
+    c.width = b.width; c.height = b.height; c.getContext('2d').drawImage(b, 0, 0); b.close && b.close(); return c.toDataURL('image/jpeg', 0.7);
+};
+const io = new IntersectionObserver(es => es.forEach(async e => {
+    if (!e.isIntersecting) return; io.unobserve(e.target);
+    try { e.target.style.backgroundImage = 'url(' + await thumb(await getFile(e.target._it)) + ')'; e.target.classList.add('th') } catch { }
+}), { root: $('main') });
+
+async function tick() {
+    const L = idx.img || []; if (mode !== 'start' || !L.length || !$('#tImg')) return;
+    try { const f = await getFile(L[li++ % L.length]), u = await thumb(f); $('#tImg .' + (lf ? 'fa' : 'fb')).style.backgroundImage = 'url(' + u + ')'; $('#tImg .fl').classList.toggle('f'); lf = !lf } catch { }
+}
+
+function clock() {
+    const k = $('#ck'); if (!k) return; const d = new Date();
+    k.textContent = d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+    $('#cd').textContent = d.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function T(g, cls, icon, label, n, fn, delayIdx) {
+    const d = document.createElement('div');
+    // Dodajemy klasę fly i ustalamy opóźnienie, tworząc kaskadę Windows 8
+    d.className = 't fly ' + cls;
+    d.style.animationDelay = (delayIdx * 0.04) + 's';
+    
+    d.innerHTML = '<div class="icon-container">' + ic(icon) + '</div>' + 
+                  (n !== '' ? '<div class="n">' + n + '</div>' : '') + 
+                  '<span>' + esc(label) + '</span>';
+    d.onclick = e => {
+        if (mode !== 'start' || g.id !== 'grid' || d.classList.contains('out')) return fn(e);
+        const all = [...g.children]; tsNext = true;
+        all.forEach((t, i) => { t.style.animationDelay = (t === d ? 0.2 : Math.min(i, 10) * 0.02) + 's'; t.classList.add('out') });
+        setTimeout(() => { fn(e); setTimeout(() => { tsNext = false; all.forEach(t => t.isConnected && t.classList.remove('out')) }, 500) }, 400);
+    };
+    g.append(d); return d;
+}
+
+function start(g) {
+    lf = false; $('#ttl').textContent = 'Start'; $('#usr-panel').hidden = false; $('#q').hidden = true;
+    $('#path').textContent = FSA ? 'Stan urządzenia: Gotowe do podłączenia lokalnego' : 'Tryb izolowany aplikacji przeglądarkowej';
+    
+    let i = 0; // Indeks do kaskady animacji
+
+    T(g, 'w gr', 'plus', 'Dodaj pliki z urządzenia', '', () => $('#fadd').click(), i++);
+    T(g, 'w bl', 'folder', 'Otwórz dysk lokalny', '', pick, i++);
+    
+    const im = T(g, 'big img live', 'img', 'Obrazy', idx.img.length, () => go('img'), i++);
+    im.id = 'tImg';
+    im.insertAdjacentHTML('afterbegin', '<div class="fl"><div class="fa"></div><div class="fb"></div></div>');
+    
+    for (const k of ['aud', 'vid', 'txt', 'code', 'pdf', 'doc', 'xls', 'ppt', 'zip', 'oth']) {
+        T(g, k, CAT[k][1], CAT[k][0], idx[k].length, () => go(k), i++);
+    }
+    
+    T(g, 'w pm', 'play', 'Odtwarzacz', mediaAll().length, () => openPl(mediaAll(), null), i++);
+    T(g, 'w tl', 'folder', root ? root.name : 'Przeglądaj dysk', root ? '' : '', () => root ? (mode = 'dir', stack = [root], sel.clear(), render()) : pick(), i++);
+    T(g, 'w vi', 'folder', 'Pobrane', lib.children.size, () => { mode = 'dir'; stack = [lib]; sel.clear(); render() }, i++);
+    
+    Object.keys(FMT).sort((a, b) => idx[b].length - idx[a].length || a.localeCompare(b)).slice(0, 80).forEach(k => T(g, FMT[k][1], CAT[FMT[k][1]][1], FMT[k][0], idx[k].length, () => go(k), i++));
+    
+    const c = document.createElement('div');
+    c.className = 't w clk fly';
+    c.style.animationDelay = (i * 0.04) + 's';
+    c.innerHTML = '<b id="ck"></b><span id="cd"></span>';
+    g.append(c);
+    
+    clock(); setTimeout(tick, 300); upd();
+}
+
+function go(k) { cat = k; mode = 'cat'; sel.clear(); selMode = false; $('#q').value = ''; render(); }
+
+async function render() {
+    if(!loggedIn) return; // Zapobiega renderowaniu w tle przed loginem
+    const g = $('#grid'); g.innerHTML = ''; $('#usr-panel').hidden = true;
+    const ts = tsNext; tsNext = false; g.classList.remove('tsin'); if (ts && mode !== 'start') { void g.offsetWidth; g.classList.add('tsin') }
+    if (mode === 'start') return start(g);
+    
+    items = mode === 'cat' ? idx[cat].slice() : await list(topStack());
+    const q = $('#q').value.trim().toLowerCase(); if (q) items = items.filter(i => i.name.toLowerCase().includes(q));
+    
+    $('#ttl').textContent = mode === 'cat' ? (CAT[cat] || FMT[cat])[0] : topStack().name;
+    $('#path').textContent = mode === 'cat' ? items.length + ' elementów' : stack.map(s => s.name).join(' \\ ');
+    
+    if (!items.length) {
+        const p = document.createElement('p'); p.className = 'e';
+        p.textContent = q ? 'Brak wyników.' : mode === 'cat' ? 'Brak plików tego typu.' : 'Folder jest pusty.';
+        g.append(p);
+    }
+    
+    for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const k = it.kind === 'directory' ? 'dir' : kind(it.name);
+        const d = document.createElement('div');
+        d.className = 't fly ' + k + (sel.has(it.name) ? ' s' : '');
+        d.style.animationDelay = (i * 0.03) + 's'; // Szybsza kaskada dla folderów
+
+        const iconType = it.kind === 'directory' ? 'folder' : k;
+        d.innerHTML = '<div class="icon-container">' + ic(iconType) + '</div><span>' + esc(it.name) + '</span>';
+        
+        if (k === 'img') { d._it = it; io.observe(d); }
+        
+        let tm, long = false;
+        d.onpointerdown = () => { long = false; tm = setTimeout(() => { long = true; tog(it.name); navigator.vibrate && navigator.vibrate(15) }, 500) };
+        d.onpointerup = d.onpointerleave = d.onpointercancel = () => clearTimeout(tm);
+        d.onclick = () => { if (long) { long = false; return } if (selMode || sel.size) tog(it.name); else safe(open)(it) };
+        d.oncontextmenu = e => e.preventDefault();
+        g.append(d);
+    }
+    upd();
+}
+
+function tog(n) { sel.has(n) ? sel.delete(n) : sel.add(n); render(); }
+function upd() {
+    const s = mode === 'start', d = mode === 'dir';
+    $('#bBack').disabled = s && !viewing; $('#bDir').disabled = !d; $('#bFile').disabled = !d; $('#bFind').disabled = s; $('#bSel').disabled = s;
+    $('#bRen').hidden = sel.size !== 1 || s; $('#bCvt').hidden = !sel.size || s; $('#bDel').hidden = !sel.size || s; $('#bSel').classList.toggle('on', selMode);
+}
+
+async function setRoot(r, n) { root = r; mode = 'start'; stack = []; sel.clear(); await scan(); render(); toast('Indeksowanie zakończone: ' + n); }
+const pick = safe(async () => {
+    if (FSA) {
+        try {
+            const h = await showDirectoryPicker({ mode: 'readwrite' }); toast('Trwa skanowanie dysku...');
+            root = { name: h.name, kind: 'directory', handle: h }; mode = 'start'; await scan(); sel.clear(); render(); return toast('Otwarto: ' + h.name);
+        } catch (e) { if (e.name === 'AbortError') return }
+    } $('#fin').click()
+});
+$('#fin').onchange = safe(async e => { const fs = [...e.target.files]; e.target.value = ''; if (!fs.length) return; await setRoot(buildTree(fs), fs.length) });
+$('#fadd').onchange = safe(async e => {
+    const fs = [...e.target.files]; e.target.value = '';
+    for (const f of fs) {
+        let n = f.name, i = 1; while (lib.children.has(n)) n = f.name.replace(/(\.[^.]*)?$/, ' (' + (i++) + ')$1');
+        lib.children.set(n, { name: n, kind: 'file', file: n === f.name ? f : new File([f], n, { type: f.type, lastModified: f.lastModified }) })
+    } await scan(); render(); toast('Zapisano pomyślnie: ' + fs.length);
+});
+
+async function open(it) { if (it.kind === 'directory') { stack.push(it.handle ? { name: it.name, kind: 'directory', handle: it.handle } : it); sel.clear(); $('#q').value = ''; tsNext = true; return render() } await view(it) }
+async function view(it) {
+    if (['aud', 'vid'].includes(kind(it.name))) return openFrom(it);
+    const f = await getFile(it), k = kind(it.name), b = $('#vb'); closeMedia(); b.innerHTML = ''; viewing = it; $('#vt').textContent = it.name; $('#vs').hidden = true;
+    const txt = (k === 'txt' || k === 'code' || ext(it.name) === 'csv' || (f.type || '').startsWith('text/')) && f.size < 3e6;
+    if (k === 'img' || k === 'aud' || k === 'vid') { vurl = URL.createObjectURL(f); const e = document.createElement(k === 'img' ? 'img' : k === 'aud' ? 'audio' : 'video'); e.src = vurl; if (k !== 'img') { e.controls = true; e.playsInline = true } b.append(e) }
+    else if (txt) { const ta = document.createElement('textarea'); ta.id = 'ta'; ta.value = await f.text(); ta.spellcheck = false; b.append(ta); $('#vs').hidden = false }
+    const m = document.createElement('div'); m.className = 'm';
+    m.innerHTML = '<small>Nazwa</small> ' + esc(it.name) + '<br><small>Rozmiar</small> ' + fmt(f.size) + '<br><small>Typ MIME</small> ' + esc(f.type || 'nieznany') + '<br><small>Zmodyfikowano</small> ' + new Date(f.lastModified).toLocaleString('pl-PL');
+    b.append(m); $('#v').hidden = false; upd();
+}
+function closeMedia() { if (vurl) { URL.revokeObjectURL(vurl); vurl = null } $('#vb').querySelectorAll('audio,video').forEach(e => e.pause()) }
+function closeView() { closeMedia(); $('#v').hidden = true; viewing = null; $('#vb').innerHTML = ''; upd() }
+function dl(f) { const a = document.createElement('a'), u = URL.createObjectURL(f); a.href = u; a.download = f.name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000) }
+
+$('#vx').onclick = closeView;
+$('#vd').onclick = safe(async () => dl(await getFile(viewing)));
+$('#vh').onclick = safe(async () => { const f = await getFile(viewing); if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: f.name }); else toast('Udostępnianie niedostępne na tej platformie.') });
+$('#vs').onclick = safe(async () => {
+    const it = viewing, t = $('#ta').value;
+    if (it.handle) { const w = await it.handle.createWritable(); await w.write(t); await w.close(); toast('Plik zapisany pomyślnie') }
+    else { it.file = new File([t], it.name, { type: it.file.type, lastModified: Date.now() }); dl(it.file); savLib(); toast('Kopia została zachowana') }
+});
+
+$('#bBack').onclick = () => {
+    if (viewing) return closeView(); sel.clear(); selMode = false; $('#q').value = '';
+    if (mode === 'dir' && stack.length > 1) { stack.pop(); return render() }
+    mode = 'start'; stack = []; scan().then(render);
+};
+$('#bAdd').onclick = () => $('#fadd').click();
+$('#bOpen').onclick = pick;
+$('#bFind').onclick = () => { const q = $('#q'); q.hidden = !q.hidden; if (q.hidden) { q.value = ''; render() } else { q.focus(); q.value = ''; } };
+$('#q').oninput = render;
+$('#bSel').onclick = () => { selMode = !selMode; if (!selMode) sel.clear(); render() };
+
+const has = async (c, n) => (await list(c)).some(i => i.name === n);
+$('#bDir').onclick = safe(async () => {
+    const n = await ask('Nowy folder', ''); if (!n) return; const c = topStack(); if (await has(c, n)) return toast('Folder już istnieje');
+    if (c.handle) await c.handle.getDirectoryHandle(n, { create: true }); else c.children.set(n, { name: n, kind: 'directory', children: new Map() }); await scan(); render()
+});
+$('#bFile').onclick = safe(async () => {
+    const n = await ask('Nowy plik tekstowy', 'nowy_plik.txt'); if (!n) return; const c = topStack(); if (await has(c, n)) return toast('Plik już istnieje');
+    if (c.handle) await c.handle.getFileHandle(n, { create: true }); else c.children.set(n, { name: n, kind: 'file', file: new File([''], n, { type: 'text/plain' }) }); await scan(); render()
+});
+$('#bDel').onclick = safe(async () => {
+    const names = [...sel]; if (!await ask('Usunąć ' + names.length + ' elementów? Brak możliwości cofnięcia.', null)) return;
+    for (const n of names) { const it = items.find(i => i.name === n); if (!it) continue; const c = it.parent || topStack(); if (c.handle) await c.handle.removeEntry(n, { recursive: true }); else c.children.delete(n) }
+    sel.clear(); selMode = false; await scan(); render(); toast('Usunięto pomyślnie')
+});
+$('#bRen').onclick = safe(async () => {
+    const old = [...sel][0], it = items.find(i => i.name === old); if (!it) return; const c = it.parent || topStack(); const n = await ask('Zmień nazwę', old); if (!n || n === old) return; if (await has(c, n)) return toast('Nazwa jest zajęta');
+    if (c.handle) { if (it.handle.move) await it.handle.move(n); else if (it.kind === 'file') { const f = await it.handle.getFile(), nh = await c.handle.getFileHandle(n, { create: true }), w = await nh.createWritable(); await w.write(f); await w.close(); await c.handle.removeEntry(old) } else throw new Error('Brak uprawnień dla tej akcji') }
+    else { c.children.delete(old); it.name = n; if (it.file) it.file = new File([it.file], n, { type: it.file.type, lastModified: it.file.lastModified }); c.children.set(n, it) }
+    sel.clear(); await scan(); render();
+});
+
+// Pasek zaklęć (Charms Bar) funkcje
+const closeCharms = () => $('#charms').style.right = '-90px';
+$('#c-search').onclick = () => { closeCharms(); if(mode==='start'){ $('#q').hidden = false; $('#q').focus(); } else { $('#bFind').click(); } };
+$('#c-start').onclick = () => { closeCharms(); mode = 'start'; stack = []; render(); };
+$('#c-share').onclick = () => { closeCharms(); if(viewing) $('#vh').click(); else toast('Wybierz plik, aby udostępnić.'); };
+$('#c-devices').onclick = () => { closeCharms(); toast('Urządzenia zewnętrzne nie są podłączone.'); };
+$('#c-settings').onclick = () => { closeCharms(); toast('Personalizacja systemu (wkrótce)'); };
+
+$('#charms-zone').addEventListener('touchstart', () => $('#charms').style.right = '0');
+document.addEventListener('touchstart', e => { if(e.touches[0].clientX < window.innerWidth - 90) closeCharms(); });
+
+// Odtwarzacz multimediów
+const I = {
+    play: '<path d="M7 4l13 8-13 8z"/>', pause: '<path d="M8 4v16M16 4v16"/>',
+    prev: '<path d="M19 5L9 12l10 7zM5 5v14"/>', next: '<path d="M5 5l10 7-10 7zM19 5v14"/>',
+    shuf: '<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
+    rep: '<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/>',
+    vol: '<path d="M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 010 7M19 5a10 10 0 010 14"/>', mute: '<path d="M11 5L6 9H2v6h4l5 4zM23 9l-6 6M17 9l6 6"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    fs: '<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>'
+};
+const sv = n => '<svg viewBox="0 0 24 24">' + I[n] + '</svg>';
+const mv = $('#mv'), pl = { q: [], i: -1, sh: 0, rp: 0, tk: 0, url: null }, SPD = [1, 1.25, 1.5, 2, 0.75]; let si = 0;
+const tm = s => { if (!isFinite(s)) return '0:00'; s = Math.floor(s); const h = s / 3600 | 0, m = s % 3600 / 60 | 0; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0') };
+const mediaAll = () => [...(idx.aud || []), ...(idx.vid || [])];
+const isM = i => i.kind === 'file' && ['aud', 'vid'].includes(kind(i.name));
+function openPl(q, it) { if (!q.length) return toast('Brak plików audio lub wideo.'); pl.q = q; $('#pl').hidden = false; $('#plist').classList.remove('on'); playAt(Math.max(0, q.indexOf(it))) }
+const openFrom = it => { const q = items.filter(isM); openPl(q.length ? q : [it], it) };
+function renderQ() { $('#plist').innerHTML = pl.q.map((it, i) => '<div class="pi' + (i === pl.i ? ' on' : '') + '" data-i="' + i + '">' + ic(kind(it.name)) + '<span>' + esc(it.name) + '</span></div>').join('') }
+const playAt = safe(async n => {
+    const L = pl.q.length; n = (n % L + L) % L; const t = ++pl.tk, it = pl.q[n], f = await getFile(it); if (t !== pl.tk) return;
+    pl.i = n; if (pl.url) URL.revokeObjectURL(pl.url); pl.url = URL.createObjectURL(f); mv.src = pl.url;
+    const v = kind(it.name) === 'vid'; $('#st').classList.toggle('au', !v); $('#pFs').hidden = !v; $('#pt').textContent = $('#pn').textContent = it.name; renderQ();
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: it.name, artist: 'Odtwarzacz Metro' });
+    try { await mv.play() } catch { }
+});
+const nxt = auto => {
+    const L = pl.q.length; let n;
+    if (pl.sh && L > 1) { do n = Math.random() * L | 0; while (n === pl.i) }
+    else { n = pl.i + 1; if (n >= L) { if (auto && !pl.rp) { mv.pause(); mv.currentTime = 0; return } n = 0 } }
+    playAt(n);
+};
+function closePl() { pl.tk++; mv.pause(); mv.removeAttribute('src'); mv.load(); if (pl.url) URL.revokeObjectURL(pl.url); pl.url = null; $('#pl').hidden = true; upd() }
+[['pSh', 'shuf'], ['pPr', 'prev'], ['pPp', 'play'], ['pNx', 'next'], ['pRp', 'rep'], ['pMu', 'vol'], ['pFs', 'fs'], ['pLs', 'list']].forEach(([id, n]) => $('#' + id).innerHTML = sv(n));
+mv.onplay = mv.onpause = () => $('#pPp').innerHTML = sv(mv.paused ? 'play' : 'pause');
+mv.onvolumechange = () => $('#pMu').innerHTML = sv(mv.muted || !mv.volume ? 'mute' : 'vol');
+mv.ontimeupdate = () => { $('#tc').textContent = tm(mv.currentTime); if (mv.duration) $('#sk').value = mv.currentTime / mv.duration * 1000 };
+mv.onloadedmetadata = () => $('#td').textContent = tm(mv.duration);
+mv.onended = () => pl.rp === 2 ? (mv.currentTime = 0, mv.play()) : nxt(true);
+mv.onerror = () => mv.getAttribute('src') && toast('Nie można odtworzyć: ' + (pl.q[pl.i] || {}).name);
+$('#sk').oninput = e => { if (mv.duration) mv.currentTime = e.target.value / 1000 * mv.duration };
+$('#pPp').onclick = mv.onclick = () => mv.paused ? mv.play() : mv.pause();
+$('#pNx').onclick = () => nxt(false);
+$('#pPr').onclick = () => mv.currentTime > 3 ? (mv.currentTime = 0) : playAt(pl.i - 1);
+$('#pSh').onclick = e => { pl.sh ^= 1; e.currentTarget.classList.toggle('on', !!pl.sh) };
+$('#pRp').onclick = e => { pl.rp = (pl.rp + 1) % 3; e.currentTarget.dataset.m = pl.rp; e.currentTarget.classList.toggle('on', !!pl.rp) };
+$('#pv').oninput = e => { mv.volume = e.target.value; mv.muted = false };
+$('#pMu').onclick = () => mv.muted = !mv.muted;
+$('#pSp').onclick = e => { si = (si + 1) % SPD.length; mv.playbackRate = SPD[si]; e.currentTarget.textContent = SPD[si] + '×' };
+$('#pFs').onclick = () => { const s = $('#st'); s.requestFullscreen ? s.requestFullscreen() : mv.webkitEnterFullscreen && mv.webkitEnterFullscreen() };
+$('#pLs').onclick = () => $('#plist').classList.toggle('on');
+$('#plist').onclick = e => { const r = e.target.closest('.pi'); if (r) { playAt(+r.dataset.i); $('#plist').classList.remove('on') } };
+$('#pdl').onclick = safe(async () => dl(await getFile(pl.q[pl.i])));
+$('#px').onclick = closePl;
+document.querySelectorAll('#pl input[type=range]').forEach(r => r.onchange = () => r.blur());
+document.addEventListener('keydown', e => {
+    if ($('#pl').hidden || e.target.tagName === 'INPUT') return;
+    if (e.key === ' ') { e.preventDefault(); $('#pPp').click() } else if (e.key === 'ArrowRight') mv.currentTime += 5; else if (e.key === 'ArrowLeft') mv.currentTime -= 5;
+    else if (e.key === 'n') nxt(false); else if (e.key === 'p') $('#pPr').click(); else if (e.key === 'Escape') closePl();
+});
+if ('mediaSession' in navigator) for (const [a, f] of [['play', () => mv.play()], ['pause', () => mv.pause()], ['previoustrack', () => $('#pPr').click()], ['nexttrack', () => nxt(false)]]) try { navigator.mediaSession.setActionHandler(a, f) } catch { }
+
+// Konta (wiele kont) + zapis plików "Pobrane" w pamięci przeglądarki (IndexedDB, osobno dla każdego konta)
+let accts = []; try { accts = JSON.parse(localStorage.getItem('metro.accts')) || [] } catch { }
+try { const o = JSON.parse(localStorage.getItem('metro.acct')); if (o && !accts.length) { accts = [{ id: o.s.slice(0, 12), ...o }]; localStorage.setItem('metro.accts', JSON.stringify(accts)) } localStorage.removeItem('metro.acct') } catch { }
+let acct = accts[0] || null, cur = null, lsig = '', svT;
+const saveAccts = () => { try { localStorage.setItem('metro.accts', JSON.stringify(accts)) } catch { toast('Konta nie zostaną zapamiętane (brak dostępu do pamięci przeglądarki).') } };
+const hx = a => [...new Uint8Array(a)].map(b => b.toString(16).padStart(2, '0')).join('');
+const cyrb = s => { let a = 0xdeadbeef, b = 0x41c6ce57; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677) } a = Math.imul(a ^ a >>> 16, 2246822507) ^ Math.imul(b ^ b >>> 13, 3266489909); b = Math.imul(b ^ b >>> 16, 2246822507) ^ Math.imul(a ^ a >>> 13, 3266489909); return (4294967296 * (2097151 & b) + (a >>> 0)).toString(16) };
+async function pwHash(p, s, a) {
+    if (a !== 'pbkdf2') return cyrb(s + p); if (!crypto.subtle) return null;
+    const e = new TextEncoder(), k = await crypto.subtle.importKey('raw', e.encode(p), 'PBKDF2', false, ['deriveBits']);
+    return hx(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: e.encode(s), iterations: 100000, hash: 'SHA-256' }, k, 256));
+}
+async function mkAcct(u, p) { const s = hx(crypto.getRandomValues(new Uint8Array(16))), a = crypto.subtle ? 'pbkdf2' : 'simple'; return { id: hx(crypto.getRandomValues(new Uint8Array(6))), u, s, a, h: await pwHash(p, s, a) } }
+function checkNew(u, p, p2) {
+    if (!u) return 'Podaj nazwę użytkownika.'; if (accts.some(a => a.u.toLowerCase() === u.toLowerCase())) return 'Takie konto już istnieje.';
+    if (p.length < 4) return 'Hasło musi mieć co najmniej 4 znaki.'; if (p !== p2) return 'Hasła nie są takie same.';
+}
+// IndexedDB
+const idb = (m, k, v) => new Promise((res, rej) => {
+    const r = indexedDB.open('metro', 1); r.onupgradeneeded = () => r.result.createObjectStore('lib'); r.onerror = () => rej(r.error);
+    r.onsuccess = () => { const t = r.result.transaction('lib', m === 'get' ? 'readonly' : 'readwrite'), o = t.objectStore('lib'), q = m === 'get' ? o.get(k) : m === 'put' ? o.put(v, k) : o.delete(k); t.oncomplete = () => res(q.result); t.onerror = t.onabort = () => rej(t.error) }
+});
+let cmp = 'gz'; try { cmp = localStorage.getItem('metro.cmp') || 'gz' } catch { }
+const pcache = new WeakMap();
+const gzOK = f => { const k = kind(f.name); return k !== 'aud' && k !== 'vid' && k !== 'zip' && !(k === 'img' && /^(jpe?g|png|webp|gif|avif)$/.test(ext(f.name))) };
+async function pack(f) {
+    const c = pcache.get(f); if (c && c.m === cmp) return c;
+    const r = { name: f.name, type: f.type, lastModified: f.lastModified, m: cmp, z: 0, blob: f };
+    try {
+        if (cmp === 'low' && kind(f.name) === 'img' && !/^(svg|gif)$/.test(ext(f.name))) {
+            const b = await createImageBitmap(f), sc = Math.min(1, 1024 / Math.max(b.width, b.height)), cv = document.createElement('canvas');
+            cv.width = Math.max(1, Math.round(b.width * sc)); cv.height = Math.max(1, Math.round(b.height * sc)); cv.getContext('2d').drawImage(b, 0, 0, cv.width, cv.height); b.close && b.close();
+            const bl = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.6)); if (bl && bl.size < f.size) { r.blob = bl; r.type = 'image/jpeg'; r.z = 'low' }
+        } else if (cmp !== 'off' && gzOK(f) && window.CompressionStream) {
+            const bl = await new Response(f.stream().pipeThrough(new CompressionStream('gzip'))).blob(); if (bl.size < f.size) { r.blob = bl; r.z = 'gz' }
+        }
+    } catch { }
+    pcache.set(f, r); return r;
+}
+async function unpack(p) {
+    const o = { type: p.type, lastModified: p.lastModified };
+    const f = new File([p.z === 'gz' ? await new Response(p.blob.stream().pipeThrough(new DecompressionStream('gzip'))).blob() : p.blob], p.name, o);
+    pcache.set(f, p); return f;
+}
+const ser = async n => n.kind === 'directory' ? { name: n.name, kind: 'directory', children: await Promise.all([...n.children.values()].map(ser)) } : { name: n.name, kind: 'file', file: await pack(n.file) };
+const des = async n => n.kind === 'directory' ? { name: n.name, kind: 'directory', children: new Map((await Promise.all(n.children.map(des))).map(c => [c.name, c])) } : { name: n.name, kind: 'file', file: n.file.blob ? await unpack(n.file) : n.file };
+const sig = n => n.kind === 'directory' ? n.name + '[' + [...n.children.values()].map(sig).join(',') + ']' : n.name + ':' + n.file.size + ':' + n.file.lastModified;
+async function loadLib() {
+    try { lib.children = new Map((await Promise.all(((await idb('get', 'lib:' + cur)) || []).map(des))).map(n => [n.name, n])) } catch { lib.children = new Map() }
+    lsig = sig(lib);
+}
+function savLib() {
+    if (!cur) return; const g = sig(lib); if (g === lsig) return; lsig = g;
+    const k = 'lib:' + cur, roots = [...lib.children.values()]; clearTimeout(svT);
+    svT = setTimeout(async () => { try { await idb('put', k, await Promise.all(roots.map(ser))) } catch { toast('Nie udało się zapisać plików w pamięci przeglądarki (brak miejsca?).') } }, 300);
+}
+const scan = async () => { await scan0(); savLib() };
+
+// Logowanie
+function loginMode() {
+    const n = !acct; $('#login-title').textContent = n ? 'Utwórz konto' : acct.u;
+    $('#login-sub').textContent = n ? 'Pierwsze uruchomienie — wybierz nazwę użytkownika i hasło' : 'Wpisz hasło, aby kontynuować';
+    $('#login-users').innerHTML = accts.length > 1 ? accts.map(a => '<a data-i="' + a.id + '"' + (a === acct ? ' style="color:#fff;font-weight:700"' : '') + '>' + esc(a.u) + '</a>').join('') : '';
+    $('#login-user').hidden = $('#login-pass2').hidden = !n; $('#login-reset').hidden = n; $('#login-err').textContent = '';
+    const p = $('#login-pass'); p.value = ''; p.placeholder = n ? 'Hasło (min. 4 znaki)' : 'Hasło'; p.autocomplete = n ? 'new-password' : 'current-password';
+    setTimeout(() => (n ? $('#login-user') : p).focus(), 60);
+}
+$('#login-users').onclick = e => { const a = e.target.closest('a'); if (a) { acct = accts.find(x => x.id === a.dataset.i); loginMode() } };
+$('#login-form').onsubmit = async e => {
+    e.preventDefault(); const U = $('#login-user'), P = $('#login-pass'), P2 = $('#login-pass2');
+    const er = m => { $('#login-err').textContent = m; const f = $('#login-form'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake') };
+    if (!acct) {
+        const u = U.value.trim(), m = checkNew(u, P.value, P2.value); if (m) return er(m);
+        acct = await mkAcct(u, P.value); accts.push(acct); saveAccts();
+    } else if (await pwHash(P.value, acct.s, acct.a) !== acct.h) { P.value = ''; return er('Nieprawidłowe hasło.') }
+    U.value = P.value = P2.value = ''; $('#login-err').textContent = ''; document.activeElement.blur();
+    cur = acct.id; await loadLib(); $('#usr').textContent = acct.u; $('#login').classList.add('hide');
+    setTimeout(() => { if (loggedIn) $('#login').hidden = true }, 600);
+    loggedIn = true; scan().then(render);
+};
+$('#login-reset').onclick = async e => {
+    e.preventDefault();
+    if (confirm('Usunąć konto „' + acct.u + '” wraz z jego zapisanymi plikami?')) {
+        try { await idb('del', 'lib:' + acct.id) } catch { } accts = accts.filter(x => x !== acct); saveAccts(); acct = accts[0] || null; loginMode()
+    }
+};
+$('#usr-panel').onclick = () => {
+    closePl(); closeView(); $('#set').hidden = true; loggedIn = false; cur = null; lib.children = new Map(); stack = []; mode = 'start'; sel.clear();
+    const l = $('#login'); l.hidden = false; acct = accts.find(x => x.u === $('#usr').textContent) || accts[0] || null; loginMode();
+    requestAnimationFrame(() => requestAnimationFrame(() => l.classList.remove('hide')));
+};
+
+// Ustawienia
+function renderSet() {
+    $('#sl').innerHTML = accts.map(a => '<div class="ar"><b>' + esc(a.u) + (a.id === cur ? ' (aktywne)' : '') + '</b>' + (a.id === cur ? '' : '<button class="sbtn" data-d="' + a.id + '">Usuń</button>') + '</div>').join('');
+    $('#sst').textContent = 'Pobrane: ' + lib.children.size + ' elementów (zapisane w przeglądarce, osobno dla każdego konta).';
+    navigator.storage && navigator.storage.estimate && navigator.storage.estimate().then(e => $('#sst').textContent += ' Zajęte: ' + fmt(e.usage || 0) + ' z ok. ' + fmt(e.quota || 0) + '.');
+}
+$('#c-settings').onclick = () => { closeCharms(); if (loggedIn) { $('#set').hidden = false; renderSet() } };
+$('#sx').onclick = () => $('#set').hidden = true;
+$('#sl').onclick = safe(async e => {
+    const id = e.target.dataset.d, a = accts.find(x => x.id === id); if (!a || !confirm('Usunąć konto „' + a.u + '” wraz z jego plikami?')) return;
+    try { await idb('del', 'lib:' + id) } catch { } accts = accts.filter(x => x !== a); saveAccts(); renderSet();
+});
+$('#sadd').onclick = safe(async () => {
+    const u = $('#s-user').value.trim(), p = $('#s-pass').value, m = checkNew(u, p, $('#s-pass2').value); if (m) return toast(m);
+    accts.push(await mkAcct(u, p)); saveAccts(); $('#s-user').value = $('#s-pass').value = $('#s-pass2').value = ''; renderSet(); toast('Dodano konto: ' + u);
+});
+$('#sclr').onclick = safe(async () => {
+    if (!confirm('Usunąć wszystkie pliki z „Pobrane” na tym koncie?')) return;
+    lib.children = new Map(); await scan(); renderSet(); render(); toast('Wyczyszczono „Pobrane”');
+});
+const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+$('#bCvt').onclick = safe(async () => {
+    let e = await ask('Zmień format wybranych plików na (np. png, jpg, webp, txt, md):', ''); if (!e) return;
+    e = e.replace(/^\./, '').toLowerCase(); if (!/^[a-z0-9]{1,8}$/.test(e)) return toast('Niepoprawny format.');
+    const keep = confirm('Zachować oryginalne pliki?\nOK = zachowaj, Anuluj = zastąp.'); let n = 0, ren = 0;
+    for (const nm of [...sel]) {
+        const it = items.find(i => i.name === nm); if (!it || it.kind === 'directory') continue;
+        const c = it.parent || topStack(), f = await getFile(it), base = nm.replace(/\.[^.]*$/, ''); let b = f, nn = base + '.' + e;
+        if (kind(nm) === 'img' && MIME[e]) {
+            const bm = await createImageBitmap(f), cv = document.createElement('canvas'); cv.width = bm.width; cv.height = bm.height; const x = cv.getContext('2d');
+            if (MIME[e] === 'image/jpeg') { x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height) } x.drawImage(bm, 0, 0); bm.close && bm.close();
+            b = await new Promise(r => cv.toBlob(r, MIME[e], 0.92)); if (!b || b.type !== MIME[e]) throw new Error('Format ' + e + ' nie jest obsługiwany w tej przeglądarce');
+        } else ren++;
+        if (nn === nm) continue; for (let i = 1; await has(c, nn); i++) nn = base + ' (' + i + ').' + e;
+        if (c.handle) { const w = await (await c.handle.getFileHandle(nn, { create: true })).createWritable(); await w.write(b); await w.close(); if (!keep) await c.handle.removeEntry(nm) }
+        else { c.children.set(nn, { name: nn, kind: 'file', file: new File([b], nn, { type: b.type || f.type, lastModified: Date.now() }) }); if (!keep) c.children.delete(nm) }
+        n++;
+    }
+    sel.clear(); selMode = false; await scan(); render(); toast('Zmieniono format: ' + n + (ren ? ' (w ' + ren + ' tylko rozszerzenie)' : ''));
+});
+$('#vr').onclick = safe(async () => {
+    const it = viewing; if (!it || !confirm('Usunąć „' + it.name + '”? Brak możliwości cofnięcia.')) return;
+    const c = it.parent || topStack(); if (c.handle) await c.handle.removeEntry(it.name); else c.children.delete(it.name);
+    closeView(); sel.delete(it.name); await scan(); render(); toast('Usunięto pomyślnie');
+});
+document.addEventListener('keydown', e => { if (e.key === 'Delete' && sel.size && $('#v').hidden && $('#pl').hidden && e.target.tagName !== 'INPUT' && $('#dlg').hidden) $('#bDel').click() });
+$('#scm').value = cmp;
+$('#scm').onchange = e => { cmp = e.target.value; try { localStorage.setItem('metro.cmp', cmp) } catch { } lsig = ''; savLib(); toast('Zapisuję ponownie w trybie: ' + e.target.selectedOptions[0].text) };
+$('#nav-zone').addEventListener('touchstart', () => $('nav').classList.add('on'));
+document.addEventListener('touchstart', e => { if (!e.target.closest('nav') && e.target.id !== 'nav-zone') $('nav').classList.remove('on') });
+$('nav').addEventListener('click', e => { if (e.target.closest('button')) setTimeout(() => $('nav').classList.remove('on'), 200) });
+loginMode();
+
+setInterval(() => { clock(); tick() }, 4500);
+
+</script>
+</body>
+</html>
